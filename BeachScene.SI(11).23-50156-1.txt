@@ -1,0 +1,628 @@
+#include <GL/glut.h>
+#include <cmath>
+#include <cstdlib>
+#include <ctime>
+
+#define MAX_RAIN 400
+#define MAX_CLOUDS 20
+
+bool isDay = true;
+bool isRain = false;
+float sunY = 622.0f;
+float waveOffset = 0.0f;
+float busX = -200.0f;
+float cloudOffset = 0.0f;
+
+float rainX[MAX_RAIN];
+float rainY[MAX_RAIN];
+float cloudX[MAX_CLOUDS];
+float cloudY[MAX_CLOUDS];
+int cloudCount = 18;
+
+bool isBusMoving = true;
+bool isCarRedMoving = true;
+bool isCarBlueMoving = true;
+
+float carRedX = -400.0f;
+float carBlueX = -800.0f;
+
+
+const int NUM_BOATS = 4;
+const float BOAT_BASE_DRAW_X = 170.0f;
+const float BOAT_BASE_DRAW_Y = 377.0f;
+const float BOAT_WIDTH = 60.0f;
+const float BOAT_HEIGHT = 43.0f;
+
+struct BoatInstanceProperties {
+    float initialTranslateX;
+    float initialTranslateY;
+    float currentDynamicX;
+    bool isMoving;
+};
+
+BoatInstanceProperties boatInstances[NUM_BOATS] = {
+    {0.0f, 0.0f, 0.0f, false},
+    {300.0f, 31.0f, 0.0f, false},
+    {650.0f, 47.0f, 0.0f, false},
+    {950.0f, 62.0f, 0.0f, false}
+};
+
+void drawBigCloud(float cx, float cy, float width) {
+    float r = width / 5.5f;
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2f(cx, cy);
+    for (int i = 0; i <= 100; i++) {
+        float a = 2.0f * 3.14159f * i / 100;
+        glVertex2f(cx + cos(a) * r, cy + sin(a) * r);
+    }
+    glEnd();
+
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2f(cx + r * 1.0f, cy + r * 0.3f);
+    for (int i = 0; i <= 100; i++) {
+        float a = 2.0f * 3.14159f * i / 100;
+        glVertex2f(cx + r * 1.0f + cos(a) * r * 0.9f, cy + r * 0.3f + sin(a) * r * 0.9f);
+    }
+    glEnd();
+
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2f(cx - r * 1.0f, cy + r * 0.3f);
+    for (int i = 0; i <= 100; i++) {
+        float a = 2.0f * 3.14159f * i / 100;
+        glVertex2f(cx - r * 1.0f + cos(a) * r * 0.9f, cy + r * 0.3f + sin(a) * r * 0.9f);
+    }
+    glEnd();
+
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2f(cx + r * 1.7f, cy + r * 0.7f);
+    for (int i = 0; i <= 100; i++) {
+        float a = 2.0f * 3.14159f * i / 100;
+        glVertex2f(cx + r * 1.7f + cos(a) * r * 0.7f, cy + r * 0.7f + sin(a) * r * 0.7f);
+    }
+    glEnd();
+
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2f(cx - r * 1.7f, cy + r * 0.7f);
+    for (int i = 0; i <= 100; i++) {
+        float a = 2.0f * 3.14159f * i / 100;
+        glVertex2f(cx - r * 1.7f + cos(a) * r * 0.7f, cy + r * 0.7f + sin(a) * r * 0.7f);
+    }
+    glEnd();
+
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2f(cx + r * 0.0f, cy + r * 1.0f);
+    for (int i = 0; i <= 100; i++) {
+        float a = 2.0f * 3.14159f * i / 100;
+        glVertex2f(cx + cos(a) * r * 1.0f, cy + r * 1.0f + sin(a) * r * 1.0f);
+    }
+    glEnd();
+}
+
+void drawCircle(float cx, float cy, float r, int segments = 100) {
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex2f(cx, cy);
+    for (int i = 0; i <= segments; i++) {
+        float a = 2.0f * 3.14159f * i / segments;
+        glVertex2f(cx + cos(a) * r, cy + sin(a) * r);
+    }
+    glEnd();
+}
+
+void drawSea() {
+    if (isRain)
+        glColor3ub(70, 90, 110);
+    else
+        glColor3ub(isDay ? 55 : 15, isDay ? 158 : 40, isDay ? 229 : 80);
+    glBegin(GL_QUADS);
+    glVertex2f(0, 272);
+    glVertex2f(1300, 272);
+    glVertex2f(1300, 467);
+    glVertex2f(0, 467);
+    glEnd();
+}
+
+void drawBeach() {
+    if (isRain)
+        glColor3ub(170, 160, 140);
+    else
+        glColor3ub(isDay ? 255 : 50, isDay ? 235 : 40, isDay ? 205 : 30);
+    glBegin(GL_QUADS);
+    glVertex2f(0, 117);
+    glVertex2f(1300, 117);
+    glVertex2f(1300, 272);
+    glVertex2f(0, 272);
+    glEnd();
+}
+
+void drawRoad() {
+    if (isRain)
+        glColor3ub(40, 40, 40);
+    else
+        glColor3ub(isDay ? 51 : 25, isDay ? 51 : 25, isDay ? 51 : 25);
+    glBegin(GL_QUADS);
+    glVertex2f(0, 0);
+    glVertex2f(1300, 0);
+    glVertex2f(1300, 117);
+    glVertex2f(0, 117);
+    glEnd();
+    glColor3ub(isDay ? 255 : 150, isDay ? 255 : 150, isDay ? 255 : 150);
+    for (int x = 0; x < 1300; x += 200) {
+        glBegin(GL_QUADS);
+        glVertex2f(x + 30, 54);
+        glVertex2f(x + 130, 54);
+        glVertex2f(x + 130, 61);
+        glVertex2f(x + 30, 61);
+        glEnd();
+    }
+}
+
+void drawBoatBase() {
+    glColor3ub(isDay ? 153 : 100, isDay ? 77 : 50, 0);
+    glBegin(GL_POLYGON);
+    glVertex2f(170, 389); glVertex2f(230, 389);
+    glVertex2f(224, 377); glVertex2f(176, 377);
+    glEnd();
+    glColor3ub(isDay ? 77 : 40, isDay ? 77 : 40, isDay ? 77 : 40);
+    glBegin(GL_LINES);
+    glVertex2f(200, 389); glVertex2f(200, 420);
+    glEnd();
+    glColor3ub(isDay ? 255 : 180, isDay ? 255 : 180, isDay ? 255 : 180);
+    glBegin(GL_TRIANGLES);
+    glVertex2f(200, 420); glVertex2f(230, 405);
+    glVertex2f(200, 389);
+    glEnd();
+}
+
+void drawBoats() {
+    for (int i = 0; i < NUM_BOATS; ++i) {
+        glPushMatrix();
+        glTranslatef(boatInstances[i].initialTranslateX + boatInstances[i].currentDynamicX,
+                     boatInstances[i].initialTranslateY, 0);
+        drawBoatBase();
+        glPopMatrix();
+    }
+}
+
+void drawLyingBenchBase() {
+    glColor3ub(isDay ? 128 : 60, isDay ? 51 : 25, isDay ? 26 : 15);
+    glBegin(GL_QUADS);
+    glVertex2f(115, 156); glVertex2f(185, 156);
+    glVertex2f(165, 191); glVertex2f(135, 191);
+    glEnd();
+    glBegin(GL_QUADS);
+    glVertex2f(120, 156); glVertex2f(125, 136);
+    glVertex2f(130, 136); glVertex2f(125, 156);
+    glEnd();
+    glBegin(GL_QUADS);
+    glVertex2f(175, 156); glVertex2f(180, 136);
+    glVertex2f(185, 136); glVertex2f(180, 156);
+    glEnd();
+}
+
+void drawTreeBase() {
+    glColor3ub(isDay ? 102 : 50, isDay ? 51 : 25, 0);
+    glBegin(GL_QUADS);
+    glVertex2f(295, 117); glVertex2f(305, 117);
+    glVertex2f(305, 209); glVertex2f(295, 209);
+    glEnd();
+
+    glColor3ub(isDay ? 0 : 10, isDay ? 153 : 40, isDay ? 0 : 10);
+
+    drawCircle(300, 226, 19);
+    drawCircle(280, 209, 17);
+    drawCircle(320, 209, 17);
+    drawCircle(290, 221, 16);
+    drawCircle(310, 221, 16);
+    drawCircle(300, 206, 16);
+}
+
+void drawBus() {
+    glColor3ub(isDay ? 255 : 150, isDay ? 204 : 120, 0);
+    glBegin(GL_QUADS);
+    glVertex2f(500, 34); glVertex2f(700, 34);
+    glVertex2f(700, 81); glVertex2f(500, 81);
+    glEnd();
+    glColor3ub(isDay ? 153 : 80, isDay ? 230 : 120, 255);
+    float wx = 520;
+    for (int i = 0; i < 4; i++) {
+        glBegin(GL_QUADS);
+        glVertex2f(wx, 56); glVertex2f(wx + 30, 56);
+        glVertex2f(wx + 30, 78); glVertex2f(wx, 78);
+        glEnd();
+        wx += 45;
+    }
+    glColor3ub(isDay ? 26 : 80, isDay ? 26 : 80, isDay ? 26 : 80);
+    drawCircle(540, 34, 8);
+    drawCircle(660, 34, 8);
+}
+
+// New: Draw a generic car (can be used for both red and blue)
+void drawCar(float r, float g, float b) {
+    glColor3ub(r, g, b);
+    glBegin(GL_QUADS);
+    glVertex2f(0, 34); // Base of the car
+    glVertex2f(100, 34);
+    glVertex2f(100, 64);
+    glVertex2f(0, 64);
+    glEnd();
+
+    glBegin(GL_QUADS); // Cabin of the car
+    glVertex2f(20, 64);
+    glVertex2f(80, 64);
+    glVertex2f(70, 84);
+    glVertex2f(30, 84);
+    glEnd();
+
+    glColor3ub(isDay ? 0 : 50, isDay ? 0 : 50, isDay ? 0 : 50); // Windows
+    glBegin(GL_QUADS);
+    glVertex2f(32, 68); glVertex2f(48, 68);
+    glVertex2f(44, 78); glVertex2f(36, 78);
+    glEnd();
+
+    glBegin(GL_QUADS);
+    glVertex2f(52, 68); glVertex2f(68, 68);
+    glVertex2f(64, 78); glVertex2f(56, 78);
+    glEnd();
+
+
+    glColor3ub(isDay ? 26 : 80, isDay ? 26 : 80, isDay ? 26 : 80); // Wheels
+    drawCircle(25, 34, 10);
+    drawCircle(75, 34, 10);
+}
+
+
+void initRain() {
+    srand((unsigned)time(NULL));
+    for (int i = 0; i < MAX_RAIN; i++) {
+        rainX[i] = rand() % 1300;
+        rainY[i] = rand() % 700;
+    }
+}
+
+void initClouds() {
+    float cx[] = {300, 320, 280, 335, 700, 720, 680, 700, 1000, 1020, 980, 150, 170, 130, 150, 1150, 1170, 1130};
+    float cy[] = {638, 646, 646, 646, 661, 669, 669, 674, 646, 654, 654, 629, 637, 637, 642, 654, 661, 661};
+    for (int i = 0; i < cloudCount; i++) {
+        cloudX[i] = cx[i];
+        cloudY[i] = cy[i];
+    }
+}
+
+void update(int) {
+    waveOffset += 0.1f;
+    if (isRain) {
+        for (int i = 0; i < MAX_RAIN; i++) {
+            rainY[i] -= 20;
+            if (rainY[i] < 0) rainY[i] = 700;
+        }
+    } else {
+        cloudOffset += 1.0f;
+        if (cloudOffset > 1300) cloudOffset = 0;
+    }
+
+    if (isBusMoving) {
+        busX += 2.0f;
+        if (busX > 1300) busX = -200; // Bus loops from left
+    }
+
+    // New: Update red car movement
+    if (isCarRedMoving) {
+        carRedX += 3.0f; // Red car moves a bit faster
+        if (carRedX > 1300) carRedX = -250; // Red car loops from left
+    }
+
+    // New: Update blue car movement
+    if (isCarBlueMoving) {
+        carBlueX += 2.5f; // Blue car moves at a different speed
+        if (carBlueX > 1300) carBlueX = -300; // Blue car loops from left
+    }
+
+
+    for (int i = 0; i < NUM_BOATS; ++i) {
+        if (boatInstances[i].isMoving) {
+            boatInstances[i].currentDynamicX += 2.0f;
+            if (boatInstances[i].initialTranslateX + boatInstances[i].currentDynamicX + BOAT_BASE_DRAW_X > 1300 + BOAT_WIDTH) {
+                boatInstances[i].currentDynamicX = - (boatInstances[i].initialTranslateX + BOAT_BASE_DRAW_X + BOAT_WIDTH);
+            }
+        }
+    }
+
+    if (!isDay && sunY > 400) sunY -= 1.5f;
+    if (isDay && sunY < 622) sunY += 1.5f;
+    if (isDay && isRain) sunY = 500;
+    glutPostRedisplay();
+    glutTimerFunc(30, update, 0);
+}
+
+void drawRain() {
+    if (isRain) {
+        if (isDay)
+            glColor3ub(180, 180, 255);
+        else
+            glColor3ub(180, 180, 255);
+
+        glBegin(GL_LINES);
+        for (int i = 0; i < MAX_RAIN; i++) {
+            glVertex2f(rainX[i], rainY[i]);
+            glVertex2f(rainX[i], rainY[i] + 15);
+        }
+        glEnd();
+    }
+}
+
+void keyboard(unsigned char key, int, int) {
+    if (key == 'd') isDay = true;
+    else if (key == 'n') isDay = false;
+    else if (key == 'r') isRain = !isRain;
+    glutPostRedisplay();
+}
+
+void drawSky() {
+    if (isRain) {
+        if (isDay)
+            glColor3ub(150, 150, 150);
+        else
+            glColor3ub(25, 30, 45);
+    } else if (isDay) {
+        int g = (int)(120 + (sunY - 467) / 155.0f * (219 - 120));
+        glColor3ub(173, g, 251);
+    } else {
+        glColor3ub(25, 30, 45);
+    }
+
+    glBegin(GL_QUADS);
+    glVertex2f(0, 467); glVertex2f(1300, 467);
+    glVertex2f(1300, 700); glVertex2f(0, 700);
+    glEnd();
+
+    if (!isRain && isDay && sunY > 500) {
+        glColor3ub(255, 220, 100);
+        drawCircle(1150, sunY, 39);
+    } else if (!isDay || (isRain && isDay)) {
+        glColor3ub(180, 180, 180);
+        drawCircle(1150, sunY, 30);
+    }
+
+    for (int i = 0; i < cloudCount; i++) {
+        float cx = fmod(cloudX[i] + cloudOffset, 1300);
+        float cy = cloudY[i];
+        float sizeFactor = (isRain ? 1.5f : 1.0f);
+
+        if (isRain && isDay) {
+            glColor3ub(110, 110, 110);
+        } else if (isDay) {
+            glColor3ub(255, 255, 255);
+        } else {
+            glColor3ub(90, 90, 90);
+        }
+
+        drawCircle(cx, cy, 16 * sizeFactor);
+        drawCircle(cx + 20 * sizeFactor, cy + 8 * sizeFactor, 14 * sizeFactor);
+        drawCircle(cx - 20 * sizeFactor, cy + 8 * sizeFactor, 14 * sizeFactor);
+        drawCircle(cx + 35 * sizeFactor, cy + 10 * sizeFactor, 12 * sizeFactor);
+    }
+}
+
+void drawWaves() {
+    if (isDay) {
+        glColor3ub(25, 105, 85);
+    } else {
+        glColor3ub(10, 40, 50);
+    }
+
+    float amplitude = isDay ? 12.0f : 6.0f;
+    float wavelength = 110.0f;
+    float freq = 2.0f * 3.14159f / wavelength;
+    int baseYs[] = {419, 373, 327};
+
+    float phaseOffsets[] = {0.0f, 20.0f, 40.0f};
+
+    for (int i = 0; i < 3; i++) {
+        glBegin(GL_LINE_STRIP);
+        for (int x = 0; x <= 1300; x += 5) {
+            float y = baseYs[i] + amplitude * sin(freq * x + waveOffset + phaseOffsets[i]);
+            glVertex2f(x, y);
+        }
+        glEnd();
+    }
+}
+
+void mouse(int button, int state, int x, int y) {
+    // Get the current window dimensions
+    int windowWidth = glutGet(GLUT_WINDOW_WIDTH);
+    int windowHeight = glutGet(GLUT_WINDOW_HEIGHT);
+
+    // Calculate scaling factors
+    float scaleX = 1300.0f / windowWidth;
+    float scaleY = 700.0f / windowHeight;
+
+
+    float openglX = x * scaleX;
+    float openglY = (windowHeight - y) * scaleY; // Invert Y and then scale
+
+    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+
+        for (int i = 0; i < NUM_BOATS; ++i) {
+            float minX = boatInstances[i].initialTranslateX + boatInstances[i].currentDynamicX + BOAT_BASE_DRAW_X;
+            float maxX = minX + BOAT_WIDTH;
+            float minY = boatInstances[i].initialTranslateY + BOAT_BASE_DRAW_Y;
+            float maxY = minY + BOAT_HEIGHT;
+
+            float padding = 15.0f;
+            if (openglX >= (minX - padding) && openglX <= (maxX + padding) &&
+                openglY >= (minY - padding) && openglY <= (maxY + padding)) {
+                boatInstances[i].isMoving = !boatInstances[i].isMoving;
+                glutPostRedisplay();
+                return;
+            }
+        }
+
+
+        const float BUS_DRAW_X_OFFSET = 500.0f;
+        const float BUS_DRAW_Y = 34.0f;
+        const float BUS_WIDTH = 200.0f;
+        const float BUS_HEIGHT = 47.0f;
+
+        float currentBusMinX = busX + BUS_DRAW_X_OFFSET;
+        float currentBusMaxX = currentBusMinX + BUS_WIDTH;
+        float currentBusMinY = BUS_DRAW_Y;
+        float currentBusMaxY = BUS_DRAW_Y + BUS_HEIGHT;
+
+        float busPadding = 10.0f;
+        if (openglX >= (currentBusMinX - busPadding) && openglX <= (currentBusMaxX + busPadding) &&
+            openglY >= (currentBusMinY - busPadding) && openglY <= (currentBusMaxY + busPadding)) {
+            isBusMoving = !isBusMoving;
+            glutPostRedisplay();
+            return;
+        }
+
+
+        const float CAR_RED_DRAW_Y = 34.0f;
+        const float CAR_WIDTH = 100.0f;
+        const float CAR_HEIGHT = 50.0f;
+
+        float currentCarRedMinX = carRedX;
+        float currentCarRedMaxX = carRedX + CAR_WIDTH;
+        float currentCarRedMinY = CAR_RED_DRAW_Y;
+        float currentCarRedMaxY = CAR_RED_DRAW_Y + CAR_HEIGHT;
+
+        float carPadding = 10.0f;
+        if (openglX >= (currentCarRedMinX - carPadding) && openglX <= (currentCarRedMaxX + carPadding) &&
+            openglY >= (currentCarRedMinY - carPadding) && openglY <= (currentCarRedMaxY + carPadding)) {
+            isCarRedMoving = !isCarRedMoving;
+            glutPostRedisplay();
+            return;
+        }
+
+
+        float currentCarBlueMinX = carBlueX;
+        float currentCarBlueMaxX = carBlueX + CAR_WIDTH;
+        float currentCarBlueMinY = CAR_RED_DRAW_Y;
+        float currentCarBlueMaxY = CAR_RED_DRAW_Y + CAR_HEIGHT;
+
+        if (openglX >= (currentCarBlueMinX - carPadding) && openglX <= (currentCarBlueMaxX + carPadding) &&
+            openglY >= (currentCarBlueMinY - carPadding) && openglY <= (currentCarBlueMaxY + carPadding)) {
+            isCarBlueMoving = !isCarBlueMoving;
+            glutPostRedisplay();
+            return;
+        }
+
+        // Check for sun click
+        float sunCenterX = 1150.0f;
+        float sunCenterY = sunY;
+        float sunRadius = 39.0f;
+        float distSq = (openglX - sunCenterX) * (openglX - sunCenterX) + (openglY - sunCenterY) * (openglY - sunCenterY);
+        if (distSq <= (sunRadius * sunRadius)) {
+            isDay = !isDay;
+            isRain = false;
+            glutPostRedisplay();
+            return;
+        }
+    }
+}
+
+void display() {
+    glClear(GL_COLOR_BUFFER_BIT);
+    drawSky();
+    drawSea();
+    drawWaves();
+    drawBeach();
+    drawRoad();
+
+    glPushMatrix();
+    glTranslatef(busX, 0, 0); // Apply busX translation to the bus
+    drawBus();
+    glPopMatrix();
+
+    // New: Draw red car
+    glPushMatrix();
+    glTranslatef(carRedX, 0, 0); // Apply carRedX translation
+    drawCar(255, 0, 0); // Red color
+    glPopMatrix();
+
+    // New: Draw blue car
+    glPushMatrix();
+    glTranslatef(carBlueX, 0, 0); // Apply carBlueX translation
+    drawCar(0, 0, 255); // Blue color
+    glPopMatrix();
+
+
+    drawBoats();
+
+    drawLyingBenchBase();
+    glPushMatrix();
+    glTranslatef(250, 20, 0);
+    drawLyingBenchBase();
+    glPopMatrix();
+    glPushMatrix();
+    glTranslatef(550, 30, 0);
+    drawLyingBenchBase();
+    glPopMatrix();
+    glPushMatrix();
+    glTranslatef(850, 10, 0);
+    drawLyingBenchBase();
+    glPopMatrix();
+
+    drawTreeBase();
+    glPushMatrix();
+    glTranslatef(300, 0, 0);
+    drawTreeBase();
+    glPopMatrix();
+    glPushMatrix();
+    glTranslatef(600, 0, 0);
+    drawTreeBase();
+    glPopMatrix();
+    glPushMatrix();
+    glTranslatef(900, 0, 0);
+    drawTreeBase();
+    glPopMatrix();
+    glPushMatrix();
+    glTranslatef(1200, 0, 0);
+    drawTreeBase();
+    glPopMatrix();
+    glPushMatrix();
+    glTranslatef(100, 0, 0);
+    drawTreeBase();
+    glPopMatrix();
+    glPushMatrix();
+    glTranslatef(750, 0, 0);
+    drawTreeBase();
+    glPopMatrix();
+
+    if (isRain) drawRain();
+
+    glFlush();
+}
+
+void init() {
+    glClearColor(128.f / 255, 204.f / 255, 255.f / 255, 1.0f);
+    glMatrixMode(GL_PROJECTION);
+    gluOrtho2D(0, 1300, 0, 700);
+    glMatrixMode(GL_MODELVIEW);
+    initRain();
+    initClouds();
+
+    isBusMoving = true;
+    isCarRedMoving = true;
+    isCarBlueMoving = true;
+
+    for (int i = 0; i < NUM_BOATS; ++i) {
+        boatInstances[i].currentDynamicX = 0.0f;
+        boatInstances[i].isMoving = false;
+    }
+}
+
+int main(int argc, char** argv) {
+    glutInit(&argc, argv);
+    glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB);
+    glutInitWindowSize(1300, 700);
+    glutInitWindowPosition(0, 0);
+    glutCreateWindow("Beach Scene");
+    init();
+    glutDisplayFunc(display);
+    glutKeyboardFunc(keyboard);
+    glutMouseFunc(mouse);
+    glutTimerFunc(30, update, 0);
+    glutMainLoop();
+    return 0;
+}
